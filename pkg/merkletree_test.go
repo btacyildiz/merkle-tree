@@ -135,9 +135,41 @@ func TestData_UpdateLeaf(t *testing.T) {
 		wantErr         bool
 	}{
 		{
+			name:            "out of bound",
+			leafCount:       3,
+			updateLeafIndex: 3,
+			updateLeafHash:  generateRandomHashes(1)[0],
+			wantErr:         true,
+		},
+		{
+			name:            "empty merkle",
+			leafCount:       0,
+			updateLeafIndex: 3,
+			updateLeafHash:  generateRandomHashes(1)[0],
+			wantErr:         true,
+		},
+		{
 			name:            "update mid",
 			leafCount:       5,
 			updateLeafIndex: 3,
+			updateLeafHash:  generateRandomHashes(1)[0],
+		},
+		{
+			name:            "update end",
+			leafCount:       5,
+			updateLeafIndex: 4,
+			updateLeafHash:  generateRandomHashes(1)[0],
+		},
+		{
+			name:            "update start",
+			leafCount:       5,
+			updateLeafIndex: 0,
+			updateLeafHash:  generateRandomHashes(1)[0],
+		},
+		{
+			name:            "big tree",
+			leafCount:       145,
+			updateLeafIndex: 100,
 			updateLeafHash:  generateRandomHashes(1)[0],
 		},
 	}
@@ -156,7 +188,6 @@ func TestData_UpdateLeaf(t *testing.T) {
 }
 
 func generateRandomHashes(n int) []string {
-
 	var generatedHashes []string
 	for i := 0; i < n; i++ {
 		bytes := sha256.Sum256([]byte(strconv.FormatInt(int64(rand.Uint64()), 10)))

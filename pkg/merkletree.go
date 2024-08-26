@@ -24,7 +24,7 @@ type ProofItem struct {
 	Index  int
 }
 
-type MerklePath struct {
+type merklePath struct {
 	ProofItem
 	ParentIndex int
 }
@@ -60,9 +60,10 @@ func (d *Data) Init(hashes []string) error {
 	return nil
 }
 
+// GenerateProof iterates over path to the root, and generates proof items
 func (d *Data) GenerateProof(leafIndex int) ([]ProofItem, error) {
 	var proofIndexes []ProofItem
-	err := d.generatePath(leafIndex, func(merklePath MerklePath) error {
+	err := d.generatePath(leafIndex, func(merklePath merklePath) error {
 		proofIndexes = append(proofIndexes, ProofItem{
 			IsLeft: merklePath.IsLeft,
 			Index:  merklePath.Index,
@@ -72,69 +73,35 @@ func (d *Data) GenerateProof(leafIndex int) ([]ProofItem, error) {
 	return proofIndexes, err
 }
 
-func (d *Data) generatePath(leafIndex int, handler func(merklePath MerklePath) error) error {
+// UpdateLeaf iterates over path to the root, updates the path
+func (d *Data) UpdateLeaf(leafIndex int, newHash string) error {
 	if d.itemCount == 0 {
 		return fmt.Errorf("merkle tree is empty")
 	}
-
 	if leafIndex < 0 || leafIndex > d.itemCount-1 {
 		return fmt.Errorf("given Index: %d should be within 0-%d range", leafIndex, d.itemCount-1)
 	}
 	leafIndexInMerkle := len(d.hashArray) - d.itemCount + leafIndex
-
-	if d.itemCount == 1 {
-		// for single item, it will be hashed with self to verify
-		return handler(MerklePath{ProofItem{
-			IsLeft: false,
-			Index:  1,
-		}, 0})
-	}
-	var curIndex = leafIndexInMerkle
-	var start = len(d.hashArray) - d.itemCount
-	var end = len(d.hashArray) - 1
-	var layerLength = d.itemCount
-	for curIndex > 0 {
-		isLeft, siblingIndex := getSibling(curIndex, start, end, layerLength)
-
-		if layerLength%2 == 0 {
-			layerLength = layerLength / 2
-		} else {
-			layerLength = layerLength/2 + 1
-		}
-		tempStart := start
-		start, end = start-layerLength, start-1
-		curIndex = start + (curIndex-tempStart)/2
-		err := handler(MerklePath{
-			ProofItem:   ProofItem{IsLeft: isLeft, Index: siblingIndex},
-			ParentIndex: curIndex,
-		})
-		if err != nil {
-			return err
-		}
-
-	}
-	return nil
-}
-
-func (d *Data) UpdateLeaf(leafIndex int, newHash string) error {
-	leafIndexInMerkle := len(d.hashArray) - d.itemCount + leafIndex
 	d.hashArray[leafIndexInMerkle] = newHash
-	return d.generatePath(leafIndex, func(merklePath MerklePath) error {
-		var mergedHashes string
+	var err error
+	var mergedHashes = newHash
+	return d.generatePath(leafIndex, func(merklePath merklePath) error {
 		if merklePath.IsLeft {
 			mergedHashes = d.hashArray[merklePath.Index] + mergedHashes
 		} else {
 			mergedHashes = mergedHashes + d.hashArray[merklePath.Index]
 		}
-		newHash, err := util.MerkleHash(mergedHashes)
+		mergedHashes, err = util.MerkleHash(mergedHashes)
 		if err != nil {
-			return err
+			return fmt.Errorf("update leaf operation for parent index %d  - error generating merkle hash %w",
+				merklePath.ParentIndex, err)
 		}
-		d.hashArray[merklePath.ParentIndex] = newHash
+		d.hashArray[merklePath.ParentIndex] = mergedHashes
 		return nil
 	})
 }
 
+// VerifyTree verifies whole structure
 func (d *Data) VerifyTree() (bool, error) {
 	var index = len(d.hashArray) - 1
 	var levelLength = d.itemCount
@@ -160,6 +127,7 @@ func (d *Data) VerifyTree() (bool, error) {
 			return false, fmt.Errorf("unable to create hash to verify %w", err)
 		}
 		if d.hashArray[parentIndex] != calcHash {
+			fmt.Printf("comparing hash at index %d is failed\nexpected hash: %s\nfounded hash: %s\n", parentIndex, calcHash, d.hashArray[parentIndex])
 			return false, nil
 		}
 		parentIndex--
@@ -173,6 +141,49 @@ func (d *Data) VerifyTree() (bool, error) {
 		}
 	}
 	return true, nil
+}
+
+func (d *Data) generatePath(leafIndex int, handler func(merklePath merklePath) error) error {
+	if d.itemCount == 0 {
+		return fmt.Errorf("merkle tree is empty")
+	}
+
+	if leafIndex < 0 || leafIndex > d.itemCount-1 {
+		return fmt.Errorf("given Index: %d should be within 0-%d range", leafIndex, d.itemCount-1)
+	}
+	leafIndexInMerkle := len(d.hashArray) - d.itemCount + leafIndex
+
+	if d.itemCount == 1 {
+		// for single item, it will be hashed with self to verify
+		return handler(merklePath{ProofItem{
+			IsLeft: false,
+			Index:  1,
+		}, 0})
+	}
+	var curIndex = leafIndexInMerkle
+	var start = len(d.hashArray) - d.itemCount
+	var end = len(d.hashArray) - 1
+	var layerLength = d.itemCount
+	for curIndex > 0 {
+		isLeft, siblingIndex := getSibling(curIndex, start, end, layerLength)
+
+		if layerLength%2 == 0 {
+			layerLength = layerLength / 2
+		} else {
+			layerLength = layerLength/2 + 1
+		}
+		tempStart := start
+		start, end = start-layerLength, start-1
+		curIndex = start + (curIndex-tempStart)/2
+		err := handler(merklePath{
+			ProofItem:   ProofItem{IsLeft: isLeft, Index: siblingIndex},
+			ParentIndex: curIndex,
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func merkleTreeElementCount(n int) int {
