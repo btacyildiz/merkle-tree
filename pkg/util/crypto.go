@@ -26,10 +26,6 @@ func ByteToHex(data []byte) string {
 	return hex.EncodeToString(data)
 }
 
-func HexToByte(hexstr string) ([]byte, error) {
-	return hex.DecodeString(hexstr)
-}
-
-func StringToByte(str string) []byte {
-	return []byte(str)
+func HexToByte(hexStr string) ([]byte, error) {
+	return hex.DecodeString(hexStr)
 }
