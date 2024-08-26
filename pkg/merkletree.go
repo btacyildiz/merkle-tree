@@ -2,7 +2,7 @@ package merkletree
 
 import (
 	"fmt"
-	"merkle-tree/pkg/util"
+	"merkletree/pkg/util"
 )
 
 type Data struct {
@@ -73,15 +73,51 @@ func (d *Data) GenerateProof(leafIndex int) ([]ProofItem, error) {
 	return proofIndexes, err
 }
 
+func (d *Data) VerifyLeaf(leafIndex int, leafHash string) (bool, error) {
+	if err := d.checkIndex(leafIndex); err != nil {
+		return false, fmt.Errorf("error verifying leaf - checking index - err: %w", err)
+	}
+
+	//leafIndexInMerkle := d.getHashListIndex(leafIndex)
+	var currentHash = leafHash
+	var err error
+	var calculatedRootHash string
+
+	err = d.generatePath(leafIndex, func(merklePath merklePath) error {
+		if merklePath.IsLeft {
+			currentHash = d.hashArray[merklePath.Index] + currentHash
+		} else {
+			currentHash = currentHash + d.hashArray[merklePath.Index]
+		}
+		currentHash, err = util.MerkleHash(currentHash)
+		if err != nil {
+			return fmt.Errorf("verify leaf operation failed for current id %d  - error generating merkle hash %w",
+				merklePath.ParentIndex, err)
+		}
+		if merklePath.ParentIndex == 0 {
+			calculatedRootHash = currentHash
+		}
+		return nil
+	})
+	if err != nil {
+		return false, fmt.Errorf("verify leaf operation is failed err: %w", err)
+	}
+
+	if calculatedRootHash != d.hashArray[0] {
+		fmt.Println("reCalculated root hash does not match")
+		return false, nil
+	}
+	return true, nil
+}
+
 // UpdateLeaf iterates over path to the root, updates the path
 func (d *Data) UpdateLeaf(leafIndex int, newHash string) error {
-	if d.itemCount == 0 {
-		return fmt.Errorf("merkle tree is empty")
+
+	if err := d.checkIndex(leafIndex); err != nil {
+		return fmt.Errorf("error updating leaf - checking index - err: %w", err)
 	}
-	if leafIndex < 0 || leafIndex > d.itemCount-1 {
-		return fmt.Errorf("given Index: %d should be within 0-%d range", leafIndex, d.itemCount-1)
-	}
-	leafIndexInMerkle := len(d.hashArray) - d.itemCount + leafIndex
+
+	leafIndexInMerkle := d.getHashListIndex(leafIndex)
 	d.hashArray[leafIndexInMerkle] = newHash
 	var err error
 	var mergedHashes = newHash
@@ -143,15 +179,14 @@ func (d *Data) VerifyTree() (bool, error) {
 	return true, nil
 }
 
+// generatePath iterate over merkle tree until root is founded
 func (d *Data) generatePath(leafIndex int, handler func(merklePath merklePath) error) error {
-	if d.itemCount == 0 {
-		return fmt.Errorf("merkle tree is empty")
+
+	if err := d.checkIndex(leafIndex); err != nil {
+		return fmt.Errorf("error generating path - checking index - err: %w", err)
 	}
 
-	if leafIndex < 0 || leafIndex > d.itemCount-1 {
-		return fmt.Errorf("given Index: %d should be within 0-%d range", leafIndex, d.itemCount-1)
-	}
-	leafIndexInMerkle := len(d.hashArray) - d.itemCount + leafIndex
+	leafIndexInMerkle := d.getHashListIndex(leafIndex)
 
 	if d.itemCount == 1 {
 		// for single item, it will be hashed with self to verify
@@ -184,6 +219,20 @@ func (d *Data) generatePath(leafIndex int, handler func(merklePath merklePath) e
 		}
 	}
 	return nil
+}
+
+func (d *Data) checkIndex(index int) error {
+	if d.itemCount == 0 {
+		return fmt.Errorf("merkle tree is empty")
+	}
+	if index < 0 || index > d.itemCount-1 {
+		return fmt.Errorf("given Index: %d should be within 0-%d range", index, d.itemCount-1)
+	}
+	return nil
+}
+
+func (d *Data) getHashListIndex(leafIndex int) int {
+	return len(d.hashArray) - d.itemCount + leafIndex
 }
 
 func merkleTreeElementCount(n int) int {

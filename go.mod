@@ -1,4 +1,4 @@
-module merkle-tree
+module merkletree
 
 go 1.20
 

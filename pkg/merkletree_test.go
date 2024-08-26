@@ -4,7 +4,7 @@ import (
 	"crypto/sha256"
 	"gotest.tools/v3/assert"
 	"math/rand"
-	"merkle-tree/pkg/util"
+	"merkletree/pkg/util"
 	"strconv"
 	"testing"
 )
@@ -183,6 +183,63 @@ func TestData_UpdateLeaf(t *testing.T) {
 			isValid, err := merkleTree.VerifyTree()
 			assert.NilError(t, err)
 			assert.Equal(t, true, isValid)
+		})
+	}
+}
+
+func TestData_VerifyLeaf(t *testing.T) {
+
+	tests := []struct {
+		name            string
+		leafCount       int
+		verifyLeafIndex int
+		// verifyLeafHash or verifyLeafHashIndex can be provided
+		verifyLeafHash      string
+		verifyLeafHashIndex int
+		isValid             bool
+		wantErr             bool
+	}{
+		{
+			name:            "out of bound",
+			leafCount:       3,
+			verifyLeafIndex: -1,
+			wantErr:         true,
+		},
+		{
+			name:           "empty merkle",
+			leafCount:      0,
+			verifyLeafHash: "bla",
+			wantErr:        true,
+		},
+		{
+			name:                "should verify",
+			leafCount:           5,
+			verifyLeafIndex:     4,
+			verifyLeafHashIndex: 4,
+			isValid:             true,
+		},
+		{
+			name:            "should be invalid",
+			leafCount:       5,
+			verifyLeafIndex: 1,
+			verifyLeafHash:  generateRandomHashes(1)[0],
+			isValid:         false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			merkleTree := Data{}
+			err := merkleTree.Init(generateRandomHashes(tt.leafCount))
+			var hashToVerify string
+			if tt.verifyLeafHash == "" {
+				hashToVerify = merkleTree.hashArray[merkleTree.getHashListIndex(tt.verifyLeafHashIndex)]
+			} else {
+				hashToVerify = tt.verifyLeafHash
+			}
+			assert.NilError(t, err)
+			isValid, err := merkleTree.VerifyLeaf(tt.verifyLeafIndex, hashToVerify)
+			assert.Equal(t, tt.wantErr, err != nil)
+			assert.Equal(t, tt.isValid, isValid)
 		})
 	}
 }
