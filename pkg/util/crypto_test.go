@@ -13,7 +13,7 @@ func Test_merkleHash(t *testing.T) {
 	}{
 		{
 			"expected result",
-			"1234567",
+			"31323334353637",
 			"8bb0cf6eb9b17d0f7d22b456f121257dc1254e1f01665370476383ea776df414",
 		},
 	}
